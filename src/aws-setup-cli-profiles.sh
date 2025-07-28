@@ -1,18 +1,12 @@
 #!/bin/bash
-# setup-aws-profiles-dynamic.sh
+# aws-setup-cli-profiles.sh
 # Set up AWS profiles dynamically using native AWS CLI
 
-
-
-# 1. Add the primary account that requires MFA access, and that will be assuming customer roles here. 
-PERMANENT_ACCESS_KEY=""
-PERMANENT_SECRET_KEY=""
-
 # AWS Region and Output Format (can be empty to force prompt)
-AWS_REGION="us-east-1"
-AWS_OUTPUT="json"
+AWS_REGION=""
+AWS_OUTPUT=""
 
-# 2. Define any CUSTOMER profiles here (add new customers as needed)
+# Define any CUSTOMER profiles here (add new customers as needed)
     # Format: "profile_name:arn:aws:iam::123456789012:role/RoleName"
     # IMPORTANT: Must include profile_name: prefix before the ARN
     # Note: DO NOT add [Default] or [profile mfa-auth] roles here,
@@ -26,14 +20,6 @@ PROFILES=(
 CONFIG_FILE="$HOME/.aws/config"
 CREDENTIALS_FILE="$HOME/.aws/credentials"
 BACKUP_DIR="$HOME/.aws/backups"
-
-# 3. Save script and copy to /%HOME%/bin (e.g. /users/jdoe/bin) and restart terminal session
-
-# 4.  Run the script
-
-# 5. Then run the aws-refresh-mfa-token.sh script to update the .aws/credentials with the temporary access id, key, and session.
-     # You should now be authenticated to AWS. See that script output for usage/testing with the --profile option. 
-     # Temporary MFA credentials are 12 hrs by default. Change in script as desired. Rerun aws-refresh-mfa-token.sh to get fresh credentials when needed
 
 echo "Setting up AWS profiles..."
 
@@ -148,7 +134,6 @@ EXISTING_REGION=$(echo "$EXISTING_VALUES" | cut -d'|' -f3)
 EXISTING_OUTPUT=$(echo "$EXISTING_VALUES" | cut -d'|' -f4)
 
 # Extract existing default role ARN
-EXISTING_DEFAULT_ROLE_ARN=""
 if [ -f "$CONFIG_FILE" ]; then
     EXISTING_DEFAULT_ROLE_ARN=$(grep -A 5 "\[default\]" "$CONFIG_FILE" | grep "role_arn" | cut -d'=' -f2 | xargs)
 fi
@@ -388,15 +373,13 @@ echo ""
 # Handle credentials file
 mkdir -p "$(dirname "$CREDENTIALS_FILE")"
 
-# Initialize backup tracking
-BACKUP_MESSAGES=()
+
 
 # Create backup of credentials file if it exists
 if [ -f "$CREDENTIALS_FILE" ]; then
     TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
     CREDENTIALS_BACKUP="$BACKUP_DIR/credentials_${TIMESTAMP}"
     cp "$CREDENTIALS_FILE" "$CREDENTIALS_BACKUP"
-    BACKUP_MESSAGES+=("Credentials: $CREDENTIALS_BACKUP")
 fi
 
 # Extract existing permanent credentials or prompt for them
@@ -407,8 +390,6 @@ if [ -f "$CREDENTIALS_FILE" ] && grep -q "\[default\]" "$CREDENTIALS_FILE"; then
         echo "⚠️  Warning: [default] profile contains session credentials"
         echo "   These will be replaced with permanent credentials for MFA token generation"
         echo ""
-        PERMANENT_ACCESS_KEY=""
-        PERMANENT_SECRET_KEY=""
     else
         # Extract existing permanent credentials from default profile
         PERMANENT_ACCESS_KEY=$(grep -A 2 "\[default\]" "$CREDENTIALS_FILE" | grep "aws_access_key_id" | cut -d'=' -f2 | xargs)
@@ -430,7 +411,6 @@ if [ -z "$PERMANENT_ACCESS_KEY" ] || [ -z "$PERMANENT_SECRET_KEY" ]; then
     if [ -z "$PERMANENT_SECRET_KEY" ]; then
         echo -n "AWS Secret Access Key: "
         # Read with visual feedback
-        PERMANENT_SECRET_KEY=""
         while IFS= read -rs -n 1 char; do
             if [[ $char == $'\0' ]]; then
                 break
@@ -493,7 +473,6 @@ if [ -f "$CONFIG_FILE" ]; then
     TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
     CONFIG_BACKUP="$BACKUP_DIR/config_${TIMESTAMP}"
     cp "$CONFIG_FILE" "$CONFIG_BACKUP"
-    BACKUP_MESSAGES+=("Config: $CONFIG_BACKUP/config_${TIMESTAMP}")
 fi
 
 # Start with default profile (dual nature: permanent creds + role config)
