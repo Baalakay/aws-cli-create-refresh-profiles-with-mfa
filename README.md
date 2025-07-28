@@ -12,7 +12,7 @@ The scripts provide a secure way to:
 
 ## Scripts
 
-### 1. `src/setup-aws-profiles.sh`
+### 1. `src/aws-setup-cli-profiles.sh`
 
 **Purpose**: Configures AWS profiles for role-based access across multiple customer accounts.
 
@@ -30,7 +30,7 @@ The scripts provide a secure way to:
 - Supports multiple customer role profiles
 - Validates email addresses and AWS ARN formats
 
-### 2. `src/refresh-aws-mfa-token.sh`
+### 2. `src/aws-refresh-mfa-token.sh`
 
 **Purpose**: Generates temporary AWS session tokens using MFA authentication.
 
@@ -40,6 +40,7 @@ The scripts provide a secure way to:
 - Updates AWS credentials with temporary access keys
 - Manages the `mfa-auth` profile
 - Provides usage examples for testing
+- Manages AWS account ID with persistence
 
 **Key Features**:
 - 12-hour token duration (configurable)
@@ -47,13 +48,15 @@ The scripts provide a secure way to:
 - Cross-platform compatibility (Linux/macOS)
 - Cross-shell compatibility (Bash/ZSH)
 - Clean profile management (removes duplicates)
+- Account ID validation (12-digit numeric) and persistence
+- Interactive account ID management (keep/replace/exit)
 
 ## Execution Order
 
 **IMPORTANT**: These scripts must be executed in the correct order:
 
-1. **First**: Run `setup-aws-profiles.sh` (one-time setup)
-2. **Then**: Run `refresh-aws-mfa-token.sh` (whenever you need fresh credentials)
+1. **First**: Run `aws-setup-cli-profiles.sh` (one-time setup)
+2. **Then**: Run `aws-refresh-mfa-token.sh` (whenever you need fresh credentials)
 
 ## Detailed Usage
 
@@ -62,38 +65,40 @@ The scripts provide a secure way to:
 **macOS:**
 ```bash
 # Copy scripts to user bin directory (already in PATH)
-cp src/setup-aws-profiles.sh ~/bin/
-cp src/refresh-aws-mfa-token.sh ~/bin/
+cp src/aws-setup-cli-profiles.sh ~/bin/
+cp src/aws-refresh-mfa-token.sh ~/bin/
 
 # Make scripts executable
-chmod +x ~/bin/setup-aws-profiles.sh
-chmod +x ~/bin/refresh-aws-mfa-token.sh
+chmod +x ~/bin/aws-setup-cli-profiles.sh
+chmod +x ~/bin/aws-refresh-mfa-token.sh
 ```
 
 **Linux:**
 ```bash
 # Copy scripts to user bin directory (already in PATH)
-cp src/setup-aws-profiles.sh ~/.local/bin/
-cp src/refresh-aws-mfa-token.sh ~/.local/bin/
+cp src/aws-setup-cli-profiles.sh ~/.local/bin/
+cp src/aws-refresh-mfa-token.sh ~/.local/bin/
 
 # Make scripts executable
-chmod +x ~/.local/bin/setup-aws-profiles.sh
-chmod +x ~/.local/bin/refresh-aws-mfa-token.sh
+chmod +x ~/.local/bin/aws-setup-cli-profiles.sh
+chmod +x ~/.local/bin/aws-refresh-mfa-token.sh
 ```
 
 **Restart your terminal session** to ensure the scripts are available in your PATH.
 
-### Step 2: Initial Setup
+### Step 2: Initial AWS Profile Setup
 
 ```bash
 # Run the setup script
-setup-aws-profiles.sh
+aws-setup-cli-profiles.sh
 ```
 
 **Setup Script Prompts**:
 - Email address (for session naming)
 - Default role ARN (your primary AWS role)
 - MFA Serial ARN (your MFA device ARN)
+- AWS region (e.g., us-east-1, us-west-2, eu-west-1)
+- AWS output format (json, text, table, yaml)
 - AWS Access Key ID and Secret Access Key (stored in [default] profile)
 
 **Example Setup Session**:
@@ -109,6 +114,12 @@ Default Role ARN: arn:aws:iam::123456789012:role/MyRole
 Please enter your MFA Serial ARN:
 MFA Serial ARN: arn:aws:iam::123456789012:mfa/user@company.com
 
+Enter AWS region (e.g., us-east-1, us-west-2, eu-west-1): us-east-1
+✓ Region saved to script file for future use
+
+Enter AWS output format (json, text, table, yaml): json
+✓ Output format saved to script file for future use
+
 Permanent AWS credentials not found or incomplete.
 Please enter your AWS access credentials:
 
@@ -119,6 +130,8 @@ AWS Secret Access Key: ********
 All profiles configured with:
 - Session name: user_at_company_dot_com
 - MFA serial: arn:aws:iam::123456789012:mfa/user@company.com
+- AWS region: us-east-1
+- AWS output format: json
 Total role profiles created: 0
 ```
 
@@ -126,14 +139,20 @@ Total role profiles created: 0
 
 ```bash
 # Run the refresh script to get temporary credentials
-refresh-aws-mfa-token.sh
+aws-refresh-mfa-token.sh
 ```
 
 **Refresh Script Prompts**:
+- AWS account ID (if not already set or when replacing)
 - MFA code from your authenticator app
 
 **Example Refresh Session**:
 ```
+Current AWS account ID that enforces MFA: 805336739295
+
+Options: y=keep, n=exit, r=replace
+Refresh MFA credentials for current account ID? (y/n/r): y
+Using existing account ID: 805336739295
 Getting new session token for account 805336739295...
 Enter MFA code: 123456
 ✓ Session token saved to mfa-auth profile
@@ -223,10 +242,10 @@ To add new customer profiles:
 1. Edit the setup script in your bin directory:
    ```bash
    # macOS
-   nano ~/bin/setup-aws-profiles.sh
+   nano ~/bin/aws-setup-cli-profiles.sh
    
    # Linux
-   nano ~/.local/bin/setup-aws-profiles.sh
+   nano ~/.local/bin/aws-setup-cli-profiles.sh
    ```
 
 2. Add customer entries to the `PROFILES` array:
@@ -242,7 +261,7 @@ To add new customer profiles:
    - **No commas needed** between entries in the Bash array
    - Each entry should be on its own line for readability
 
-3. Run the setup script again: `setup-aws-profiles.sh`
+3. Run the setup script again: `aws-setup-cli-profiles.sh`
 
 ## Security Features
 
@@ -258,7 +277,7 @@ To add new customer profiles:
 
 1. **"Cannot call GetSessionToken with session credentials"**
    - **Cause**: `[default]` profile contains session credentials instead of permanent credentials
-   - **Solution**: Run the setup script to configure permanent credentials: `setup-aws-profiles.sh`
+   - **Solution**: Run the setup script to configure permanent credentials: `aws-setup-cli-profiles.sh`
    - **Prevention**: Always use permanent credentials in `[default]` profile for MFA token generation
 
 2. **"Failed to get session token"**
@@ -266,21 +285,26 @@ To add new customer profiles:
    - Check that your permanent credentials are valid
    - Ensure your MFA device is properly configured
 
-3. **"Invalid email format"**
+3. **"Account ID must be exactly 12 digits"**
+   - **Cause**: AWS account ID must be exactly 12 numeric digits
+   - **Solution**: Enter a valid 12-digit AWS account ID (e.g., 123456789012)
+   - **Note**: Account ID is automatically saved for future use
+
+4. **"Invalid email format"**
    - Use a valid email address format (e.g., user@domain.com)
 
-4. **"Invalid ARN format"**
+5. **"Invalid ARN format"**
    - Role ARN format: `arn:aws:iam::123456789012:role/RoleName`
    - MFA ARN format: `arn:aws:iam::123456789012:mfa/user@domain.com`
 
-5. **Permission Denied**
+6. **Permission Denied**
    - Ensure your role has the necessary permissions
    - Check that the role trust relationship allows your account
 
 ### Token Expiration
 
 When your session token expires (after 12 hours):
-1. Run `./src/refresh-aws-mfa-token.sh` again
+1. Run `./src/aws-refresh-mfa-token.sh` again
 2. Enter a new MFA code
 3. Your credentials will be refreshed
 
